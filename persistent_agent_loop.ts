@@ -10,6 +10,11 @@ dotenv.config();
 const PORT = Number(process.env.PORT) || 3000;
 const NEON_DATABASE_URL = process.env.DATABASE_URL;
 
+if (!NEON_DATABASE_URL) {
+  console.error("FATAL: DATABASE_URL is not defined in environment variables.");
+  process.exit(1);
+}
+
 interface AgentState {
   last_run_at: Date;
   iteration_count: number;
@@ -52,6 +57,12 @@ const pool = new Pool({
   },
 });
 
+// Error handling for the pool
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
 async function initDb() {
   try {
     const queryStr = "CREATE TABLE IF NOT EXISTS agent_logs (id SERIAL PRIMARY KEY, timestamp TIMESTAMPTZ DEFAULT NOW(), iteration INTEGER, thought TEXT, action VARCHAR(50), payload JSONB, status VARCHAR(20)); CREATE TABLE IF NOT EXISTS agent_state (id INT PRIMARY KEY DEFAULT 1, last_run_at TIMESTAMPTZ, iteration_count INTEGER DEFAULT 0, memory_context TEXT, is_active BOOLEAN DEFAULT TRUE, CONSTRAINT single_row CHECK (id = 1)); CREATE TABLE IF NOT EXISTS dex_pools (id SERIAL PRIMARY KEY, chain_id VARCHAR(50), dex_id VARCHAR(50), pair_address VARCHAR(255) UNIQUE, base_token_name VARCHAR(255), base_token_symbol VARCHAR(50), price_usd NUMERIC, volume_24h NUMERIC, liquidity_usd NUMERIC, pair_created_at TIMESTAMPTZ, last_updated TIMESTAMPTZ DEFAULT NOW()); INSERT INTO agent_state (id, iteration_count, is_active) VALUES (1, 0, TRUE) ON CONFLICT DO NOTHING;";
@@ -59,6 +70,8 @@ async function initDb() {
     console.log('Database initialized.');
   } catch (err) {
     console.error('Error initializing database:', err);
+    // If we can't initialize the DB, the agent shouldn't run
+    process.exit(1);
   }
 }
 
@@ -106,8 +119,9 @@ async function pollDexScreener(chains: string[]) {
  * CORE AGENT LOOP
  */
 async function runAgentIteration() {
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     const stateRes = await client.query('SELECT * FROM agent_state WHERE id = 1');
     const state: AgentState = stateRes.rows[0];
 
