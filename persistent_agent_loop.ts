@@ -1,9 +1,6 @@
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
-import { generateObject } from '/workspace/poke/automation-runtime.ts';
-import { web_search } from '/workspace/poke/search/web_search.ts';
-import { web_extract } from '/workspace/poke/search/web_extract.ts';
 
 dotenv.config();
 
@@ -121,19 +118,13 @@ async function runAgentIteration() {
 
     console.log("Iteration " + state.iteration_count + " Starting autonomous reasoning...");
 
-    const decision = await generateObject({
-      prompt: "You are a persistent autonomous agent. Current state: " + JSON.stringify(state) + ". Recent goal: Monitor market conditions on Solana and Base, and manage portfolio. Perform a structured thinking process and decide the next optimal action.",
-      schema: {
-        type: "object",
-        properties: {
-          thought: { type: "string", description: "Internal monologue and reasoning steps." },
-          action: { type: "string", enum: ["SEARCH", "TRANSACT", "NOTIFY", "WAIT", "UPDATE_DB", "POLL_DEX"] },
-          payload: { type: "object", description: "Arguments for the chosen action." },
-          confidence: { type: "number", minimum: 0, maximum: 1 }
-        },
-        required: ["thought", "action", "payload", "confidence"]
-      }
-    }) as unknown as StepOutcome;
+    // Autonomous reasoning logic (Simplified for external environment)
+    const decision: StepOutcome = {
+        thought: "Polling latest DEX pools to keep the database synchronized with Solana and Base trends.",
+        action: "POLL_DEX",
+        payload: { chains: ["solana", "base"] },
+        confidence: 1.0
+    };
 
     let status = 'SUCCESS';
     try {
@@ -145,9 +136,7 @@ async function runAgentIteration() {
           decision.payload.polled_summary = polled;
           break;
         case 'SEARCH':
-          const searchQuery = (decision.payload.query as string) || 'latest crypto trends solana base';
-          const searchResults = await web_search({ query: searchQuery });
-          decision.payload.results = searchResults;
+          console.log('SEARCH action is currently restricted to the container environment.');
           break;
         case 'TRANSACT':
           console.log('Executing mock transaction:', decision.payload);
