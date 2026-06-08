@@ -74,7 +74,7 @@ async function pollDexScreener(chains: string[]) {
       const data = await response.json() as { pairs?: DexPair[] };
       
       if (data && Array.isArray(data.pairs)) {
-        const pairs = data.pairs.slice(0, 5);
+        const pairs = data.pairs.slice(0, 10);
         for (const pair of pairs) {
           try {
             const insertQuery = "INSERT INTO dex_pools (chain_id, dex_id, pair_address, base_token_name, base_token_symbol, price_usd, volume_24h, liquidity_usd, pair_created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TO_TIMESTAMP($9 / 1000.0)) ON CONFLICT (pair_address) DO UPDATE SET price_usd = EXCLUDED.price_usd, volume_24h = EXCLUDED.volume_24h, liquidity_usd = EXCLUDED.liquidity_usd, last_updated = NOW();";
@@ -118,9 +118,8 @@ async function runAgentIteration() {
 
     console.log("Iteration " + state.iteration_count + " Starting autonomous reasoning...");
 
-    // Autonomous reasoning logic (Simplified for external environment)
     const decision: StepOutcome = {
-        thought: "Polling latest DEX pools to keep the database synchronized with Solana and Base trends.",
+        thought: "Polling latest DEX pools to find crazy plays and keep database synchronized.",
         action: "POLL_DEX",
         payload: { chains: ["solana", "base"] },
         confidence: 1.0
@@ -136,19 +135,14 @@ async function runAgentIteration() {
           decision.payload.polled_summary = polled;
           break;
         case 'SEARCH':
-          console.log('SEARCH action is currently restricted to the container environment.');
           break;
         case 'TRANSACT':
-          console.log('Executing mock transaction:', decision.payload);
           break;
         case 'NOTIFY':
-          console.log('Sending notification:', decision.payload.message);
           break;
         case 'WAIT':
-          console.log('Agent decided to wait.');
           break;
         case 'UPDATE_DB':
-          console.log('Updating knowledge base in Postgres.');
           break;
       }
     } catch (execError) {
@@ -182,8 +176,30 @@ async function main() {
   app.get('/', (req: Request, res: Response) => {
     res.send({ status: 'Agent Loop Running', timestamp: new Date() });
   });
+
+  app.get('/alerts', async (req: Request, res: Response) => {
+    try {
+      // Query for anomalies: High volume, decent liquidity, or recent activity
+      const alertQuery = `
+        SELECT * FROM dex_pools 
+        WHERE volume_24h > 500000 
+        AND liquidity_usd > 10000
+        ORDER BY volume_24h DESC 
+        LIMIT 10
+      `;
+      const result = await pool.query(alertQuery);
+      res.json({
+        alerts: result.rows,
+        timestamp: new Date()
+      });
+    } catch (err) {
+      console.error('Error fetching alerts:', err);
+      res.status(500).json({ error: 'Failed to fetch alerts' });
+    }
+  });
+
   app.listen(PORT, '0.0.0.0', () => {
-    console.log("Health check server listening on port " + PORT);
+    console.log("Health check and Alerts server listening on port " + PORT);
   });
 
   while (true) {
